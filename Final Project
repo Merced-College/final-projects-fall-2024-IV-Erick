@@ -1,0 +1,654 @@
+import java.util.*;
+import java.time.LocalDate;
+
+/**
+ * @author Aguilar Hernandez, Erick
+ * @date 11/20/2024
+ * @title Final Programming Project: Library Application
+ * @category CPSC-39
+ * 
+ * This program is a library application that allows for users to search for books
+ * in the library's catalog, check books out, add themselves to a waitlist for a certain book
+ * manage any fines they owe to the library, and even contains secret options used only
+ * by Admin. Those options feature adding books to the library's catalog, altering the library's
+ * catalog size, checking the status of borrow books using a real time time tracker, check
+ * for any fines users owe, and manually add fines to users who are late to returning their books
+ * by the due date or are returned damaged. There's so much more features I could add, but I will limit
+ * myself to the basics due to time constraints. This was a fun project to work on!
+ * 
+ * Note: ChatGPT AI was used to verify the validity of my program to help ensure everything runs smoothly.
+ * Most of my program was written by myself. If there are any concerns, please notify me.
+ */
+
+class LibrarySystem {
+    // Components
+    private String[] bookCatalog; // Simple Array that stores book titles
+    private HashMap<String, String> borrowedBooks; // HashMap that Maps book title to borrower name
+    private HashMap<String, LocalDate> checkoutDates; // HashMap that tracks when books were borrowed
+    private HashMap<String, Queue<String>> bookWaitlists; // HashMap that keeps a record of people on a waitlist for a book utilizing a queue data structure.
+    private HashMap<String, Double> fines; // HashMap that keeps a record of fines a user has
+    private HashMap<String, String> adminCredentials; // HashMap that stores admin usernames and passwords
+
+    /**
+     * Constructor that initializes the library system with a specified catalog size.
+     *
+     * @param catalogSize the size of the book catalog.
+     */
+    public LibrarySystem(int catalogSize) {
+        bookCatalog = new String[catalogSize]; // Initializes Book Catalog
+        borrowedBooks = new HashMap<>(); // Initializes borrowed books list
+        checkoutDates = new HashMap<>(); // Initializes Checkout Date Tracker
+        bookWaitlists = new HashMap<>(); // Initializes Waitlist
+        fines = new HashMap<>(); // Initializes Fines List
+        
+        adminCredentials = new HashMap<>(); // Initializes Admin Credentials List
+        adminCredentials.put("Erick", "1234"); // I am the only admin mapped so far
+    }
+
+    
+    
+    /* All Methods correlating to books */
+    
+    
+    
+    /**
+     * Adds a book to the catalog at the specified index. Note: Admin Use Only
+     *
+     * @param index is the index in the catalog where the book should be added
+     * @param bookTitle the title of the book
+     */
+    public void addBook(int index, String bookTitle) {
+        if (index >= 0 && index < bookCatalog.length) {
+            bookCatalog[index] = bookTitle;
+            bookWaitlists.put(bookTitle, new LinkedList<>()); // Initializes a waitlist for each book
+        } else {
+            System.out.println("Invalid index!");
+        }
+    }
+
+    /**
+     * Displays a single book when user searches for it specifically.
+     */
+    
+    public void displayBook(int index) {
+    	int waitlistSize = bookWaitlists.containsKey(bookCatalog[index]) ? bookWaitlists.get(bookCatalog[index]).size() : 0;
+    	System.out.println("Book Found: " + bookCatalog[index] + " (Waitlist size: " + waitlistSize + ")");
+    }
+    
+    /*
+     * Displays all books in the catalog with their waitlist size.
+     */
+    public void displayBooks() {
+        System.out.println("Library Book Catalog:");
+        for (int i = 0; i < bookCatalog.length; i++) {
+            if (bookCatalog[i] != null) {
+                int waitlistSize = bookWaitlists.containsKey(bookCatalog[i]) ? bookWaitlists.get(bookCatalog[i]).size() : 0;
+                System.out.println((i + 1) + ". " + bookCatalog[i] + " (Waitlist size: " + waitlistSize + ")");
+            }
+        }
+    }
+
+    /**
+     * Checks out a book to a borrower. If the book is already checked out, the borrower
+     * is added to the waitlist. If the user owes more than $100, they are unable to check
+     * out a book until the fine has been paid off.
+     *
+     * @param bookTitle    the title of the book to check out
+     * @param borrowerName the name of the borrower
+     */
+    public void checkoutBook(String bookTitle, String borrowerName) {
+    	 // Check if the borrower has fines exceeding $100
+        if (fines.containsKey(borrowerName) && fines.get(borrowerName) > 100.0) {
+            System.out.println("Checkout denied! Borrower " + borrowerName + " has fines exceeding $100.");
+            return;
+        }
+        // Check if the book has already been borrowed. If not, register the book under the user name.
+        if (borrowedBooks.containsKey(bookTitle)) {
+            System.out.println("Book already borrowed. Adding to waitlist.");
+            bookWaitlists.get(bookTitle).add(borrowerName);
+        } else {
+            borrowedBooks.put(bookTitle, borrowerName);
+            checkoutDates.put(bookTitle, LocalDate.now());
+            System.out.println("Book checked out successfully.");
+        }
+    }
+    
+    /**
+     * Tracks the number of days since a book was checked out. Note: Admin use only
+     *
+     * @param bookTitle the title of the book to track
+     */
+    public void trackDaysSinceCheckout(String bookTitle) {
+        if (checkoutDates.containsKey(bookTitle)) {
+            LocalDate checkoutDate = checkoutDates.get(bookTitle);
+            long days = java.time.temporal.ChronoUnit.DAYS.between(checkoutDate, LocalDate.now());
+            System.out.println("Book \"" + bookTitle + "\" has been checked out for " + days + " days.");
+        } else {
+            System.out.println("Book has not been checked out.");
+        }
+    }
+
+    /*
+     * Allows a user to return a book they checked out and updates the waitlist.
+     * Displays an error message if the book hasn't been checked out.
+     * 
+     * @param bookTitle of the book to return
+     */
+    public void returnBook(String bookTitle) {
+    	// Verifies that the book is already borrowed
+        if (borrowedBooks.containsKey(bookTitle)) {
+            String borrower = borrowedBooks.remove(bookTitle);
+            System.out.println(borrower + " returned " + bookTitle);
+
+            Queue<String> waitlist = bookWaitlists.get(bookTitle); // Removes the current borrower from the queue and notifies who is next.
+            if (!waitlist.isEmpty()) {
+                String nextBorrower = waitlist.poll();
+                borrowedBooks.put(bookTitle, nextBorrower);
+                System.out.println(nextBorrower + " is next in line and has been notified to borrow " + bookTitle);
+            }
+        } 
+        else {
+            System.out.println("This book is not currently checked out.");
+        }
+    }
+
+    /** 
+     * Adds a user to the waitlist if book is already checked out. Tracks the amount of user in the waitlist.
+     * 
+     * @param bookTitle is used to categorize the user in the waitlist.
+     * @param borrowerName is used to identify the user.
+     */
+    public void addToWaitlist(String bookTitle, String borrowerName) {
+        if (bookWaitlists.containsKey(bookTitle)) {
+            bookWaitlists.get(bookTitle).add(borrowerName);
+            System.out.println(borrowerName + " added to the waitlist for " + bookTitle);
+        } else {
+            System.out.println("Book not found!");
+        }
+    }
+    
+    
+    
+    /* All methods correlating to fines. */
+    
+    
+    /*
+     * Displays a single fine for the user specified.
+     */
+    public void displaySingleFine() {
+        Scanner scanner = new Scanner(System.in);
+
+        // Prompt the user for their name
+        System.out.print("Enter borrower name to view fine: ");
+        String borrowerName = scanner.nextLine();
+
+        // Check if a fine exists for the given name
+        if (fines.containsKey(borrowerName)) {
+            // Retrieve and display the fine amount
+            double fineAmount = fines.get(borrowerName);
+            System.out.println("Borrower: " + borrowerName);
+            System.out.println("Fine Amount: $" + fineAmount);
+        } else {
+            // Display a message if no fine is found
+            System.out.println("No fine found for borrower: " + borrowerName);
+        }
+    }
+    
+    /**
+     * Displays the list of borrowers with fines, sorted by fine amount in descending order. Note: Admin Use only
+     */
+    public void displaySortedFinesList() {
+        if (fines.isEmpty()) {
+            System.out.println("No fines to display.");
+            return;
+        }
+
+        System.out.println("Borrowers with fines (sorted by fine amount):");
+        fines.entrySet().stream()
+                .sorted((e1, e2) -> Double.compare(e2.getValue(), e1.getValue()))
+                .forEach(entry -> System.out.println(entry.getKey() + ": $" + entry.getValue()));
+    }
+    
+    /**
+     * Adds a fine for a borrower or updates their fine if they already have one. Note: Admin Use only
+     *
+     * @param borrowerName the name of the borrower
+     * @param fineAmount the amount to be added to the borrower's fine
+     */
+    
+    public void addFine(String borrowerName, double fineAmount) {
+        fines.put(borrowerName, fines.getOrDefault(borrowerName, 0.0) + fineAmount);
+    }
+    
+    /**
+     * Allows a borrower to pay a part or all of their fine.
+     *
+     * @param borrowerName the name of the borrower
+     * @param paymentAmount the amount the borrower wants to pay
+     */
+    public void payFine(String borrowerName, double paymentAmount) {
+        if (fines.containsKey(borrowerName)) {
+            double currentFine = fines.get(borrowerName);
+            if (currentFine >= paymentAmount) {
+                fines.put(borrowerName, currentFine - paymentAmount);
+                System.out.println("Payment successful! Remaining fine: $" + fines.get(borrowerName));
+            } else {
+                System.out.println("Payment exceeds the fine amount.");
+            }
+        } 
+        
+        else {
+            System.out.println("No fines found for this borrower.");
+        }
+    }
+    
+    
+    
+    
+    /** Algorithms Used **/
+    
+    
+    /* Quick Sort */
+    
+
+    /**
+     * Sorts the book catalog in alphabetical order using Quick Sort.
+     */
+    public void quickSortBooks() {
+        quickSort(bookCatalog, 0, bookCatalog.length - 1, true);
+    }
+
+    /**
+     * Sorts the book catalog in reverse alphabetical order using Quick Sort.
+     */
+    public void reverseQuickSortBooks() {
+        quickSort(bookCatalog, 0, bookCatalog.length - 1, false);
+    }
+
+    /**
+     * Algorithm 1: Quick Sort. Used for it's efficiency on sorting.
+     * Helper method to perform Quick Sort on the book catalog.
+     *
+     * @param arr the array of book titles to be sorted
+     * @param low the starting index
+     * @param high the ending index
+     * @param ascending true for ascending order, false for descending order
+     */
+    private void quickSort(String[] bookArr, int low, int high, boolean order) {
+        if (low < high) {
+            int pivotIndex = partition(bookArr, low, high, order);
+            quickSort(bookArr, low, pivotIndex - 1, order);
+            quickSort(bookArr, pivotIndex + 1, high, order);
+        }
+    }
+
+    /**
+     * Partitions the array for Quick Sort based on a pivot element.
+     *
+     * @param arr the array of book titles
+     * @param low the starting index
+     * @param high the ending index
+     * @param order true for ascending order, false for descending order
+     * @return the pivot index
+     */
+    private int partition(String[] bookArr, int low, int high, boolean order) {
+        String pivot = bookArr[high];
+        int i = low - 1;
+
+        for (int j = low; j < high; j++) {
+            if (bookArr[j] != null && pivot != null) {
+                boolean condition = order ? bookArr[j].compareTo(pivot) < 0 : bookArr[j].compareTo(pivot) > 0;
+                if (condition) {
+                    i++;
+                    String temp = bookArr[i];
+                    bookArr[i] = bookArr[j];
+                    bookArr[j] = temp;
+                }
+            }
+        }
+
+        String temp = bookArr[i + 1];
+        bookArr[i + 1] = bookArr[high];
+        bookArr[high] = temp;
+
+        return i + 1;
+    }
+
+    
+    
+    
+    /* Counting Sort */
+    
+    
+    /**
+     * Sorts the book catalog by title length using Counting Sort.
+     */
+    public void countingSortBooks() {
+        String[] sortedCatalog = countingSortByLength(bookCatalog);
+        System.arraycopy(sortedCatalog, 0, bookCatalog, 0, bookCatalog.length);
+    }
+
+    /**
+     * Algorithm 2: Counting Sort. Used as an alternate sorting option based on title lengths of books.
+     * Helper method to perform Counting Sort based on title length.
+     *
+     * @param arr the array of book titles
+     * @return a sorted array of book titles
+     */
+    private String[] countingSortByLength(String[] arr) {
+        int maxLength = 0;
+        for (String book : arr) {
+            if (book != null) {
+                maxLength = Math.max(maxLength, book.length());
+            }
+        }
+
+        int[] count = new int[maxLength + 1];
+        String[] output = new String[arr.length];
+
+        for (String book : arr) {
+            if (book != null) {
+                count[book.length()]++;
+            }
+        }
+
+        for (int i = 1; i <= maxLength; i++) {
+            count[i] += count[i - 1];
+        }
+
+        for (int i = arr.length - 1; i >= 0; i--) {
+            if (arr[i] != null) {
+                int length = arr[i].length();
+                output[count[length] - 1] = arr[i];
+                count[length]--;
+            }
+        }
+
+        return output;
+    }
+    
+    
+    /* Binary Search (Recursive) */
+    
+    
+    
+    /**
+     * Algorithm 3: Binary Search used for overall efficient searching of books. Utilizes recursive functioning.
+     * Performs a recursive binary search for a book title in the catalog.
+     *
+     * @param arr the array of book titles
+     * @param low the starting index
+     * @param high the ending index
+     * @param bookTitle the title to search for
+     * @return the index of the book, or -1 if not found
+     */
+    public int recursiveSearch(String[] arr, int low, int high, String bookTitle) {
+        // Base case: if the range is invalid, return -1
+        if (low > high) {
+            return -1;
+        }
+        
+        // Calculate the middle index
+        int mid = (low + high) / 2;
+        
+        // If the book at the middle index matches, return the index
+        if (arr[mid] != null && arr[mid].equals(bookTitle)) {
+            return mid;
+        }
+        
+        // If the book title is smaller than the middle element, search in the left half
+        if (arr[mid] != null && arr[mid].compareTo(bookTitle) > 0) {
+            return recursiveSearch(arr, low, mid - 1, bookTitle);
+        }
+        
+        // If the book title is larger than the middle element, search in the right half
+        return recursiveSearch(arr, mid + 1, high, bookTitle);
+    }
+    
+    
+    
+    
+    /* Admin Menu Methods Section */
+    
+    /**
+     * Admin authentication that allows access for administrative features.
+     * 
+     * @param username authenticates the user's ID.
+     * @param password authenticates the passcode by comparing it what's on file for that user.
+     * @return true if username and password match, false otherwise.
+     */
+    private boolean authenticateAdmin(String username, String password) {
+        return adminCredentials.containsKey(username) && adminCredentials.get(username).equals(password);
+    }
+    
+    /*
+     * Secret Admin login prompt that leads to the Admin Menu.
+     * Allows access if authenticateAdmin returns True, denies access 
+     * if it returns false and returns back to User Menu.
+     */
+    public void adminLogin() {
+    	Scanner scanner = new Scanner(System.in);
+
+        System.out.print("Enter admin username: ");
+        String username = scanner.nextLine();
+        System.out.print("Enter admin password: ");
+        String password = scanner.nextLine();
+
+        if (authenticateAdmin(username, password)) {
+            System.out.println("Login successful! Accessing admin controls...");
+            adminMenu();
+            
+        } else {
+            System.out.println("Invalid username or password. Access denied.");
+        }
+    }
+    
+    /*
+     * Admin Menu that displays options to choose from similar to user menu.
+     */
+    private void adminMenu() {
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            System.out.println("\nAdmin Controls:");
+            System.out.println("1. Add Book to Catalog");
+            System.out.println("2. Change Catalog Size");
+            System.out.println("3. Display Books");
+            System.out.println("4. Display Checkout Status");
+            System.out.println("5. Display Fines List");
+            System.out.println("6. Manually Add Fine");
+            System.out.println("7. Return to Main Menu");
+
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Consume newline
+
+            switch (choice) {
+                case 1: // Prompts Admin to enter book title and index to add to the array of bookTitles.
+                    System.out.print("Enter book title: ");
+                    String bookTitle = scanner.nextLine();
+                    System.out.print("Enter index to add the book: ");
+                    int index = scanner.nextInt();
+                    addBook(index, bookTitle);
+                    System.out.println("Book added successfully!");
+                    break;
+                case 2: // Prompts Admin to enter the new size of the bookCatalog array
+                    System.out.print("Enter new catalog size: ");
+                    int newSize = scanner.nextInt();
+                    changeCatalogSize(newSize);
+                    System.out.println("Catalog size updated!");
+                    break;
+                case 3: // Displays all books in the bookCatalog array
+                	displayBooks();
+                	break;
+                case 4: // Displays the checkout status of the prompted bookTitle
+                	System.out.print("Enter book title: ");
+                    bookTitle = scanner.nextLine();
+                    trackDaysSinceCheckout(bookTitle);
+                    break;
+                case 5: // Displays a list of fines that need to be paid
+                	displaySortedFinesList();
+                    break;
+                case 6: // Allows for the admin to manually add fines on their own in case of errors or damages
+                	System.out.print("Enter borrower name: ");
+                    String borrowerName = scanner.nextLine();
+                    System.out.print("Enter fine amount: ");
+                    double fineAmount = scanner.nextDouble();
+                    addFine(borrowerName, fineAmount);
+                    System.out.println("Fine added successfully!");
+                    break;
+                case 7: // Returns back to user menu
+                	System.out.println("Returning to Main Menu...");
+                    return;
+                default: // Prompts the Admin to enter another option by number
+                    System.out.println("Invalid choice! Try again.");
+            }
+        }
+    }
+    
+    /**
+     * Allows the admin to alter the size of bookCatalog array
+     * 
+     * @param newSize alters the size of the array specified by the Admin.
+     */
+    private void changeCatalogSize(int newSize) {
+        String[] newCatalog = new String[newSize];
+        for (int i = 0; i < Math.min(bookCatalog.length, newSize); i++) {
+            newCatalog[i] = bookCatalog[i];
+        }
+        bookCatalog = newCatalog;
+    }
+    
+    
+    
+    
+    /* User Menu */
+    
+
+    /*
+     *  Default User Menu that prompts the user to select their action in the library.
+     *  User can input an integer corresponding to the list of options displayed.
+     */
+    public void userMenu() {
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            System.out.println("\nLibrary System Menu:");
+            System.out.println("1. Search for Books");
+            System.out.println("2. Display Books");
+            System.out.println("3. Checkout Book");
+            System.out.println("4. Return Book");
+            System.out.println("5. Display Fines");
+            System.out.println("6. Pay Fines");
+            System.out.println("7. Exit");
+            System.out.println();
+
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Consume newline
+
+            switch (choice) {
+            	case 1: // Allows user to search the bookCatalog for their desired book.
+            		System.out.print("Enter book title to search: ");
+                    String bookTitle = scanner.nextLine();
+                    int index = recursiveSearch(bookCatalog, 0, bookCatalog.length - 1, bookTitle);
+                    if (index != -1) {
+                        displayBook(index);
+                    } else {
+                        System.out.println("Book not found.");
+                    }
+                    break;
+                case 2: // Allows user to display all the books in the catalog and even allows for different methods of sorting.
+                	displayBooks();
+                	System.out.println("Sort By: ");
+                	System.out.println("1. Alphabetical Order");
+                	System.out.println("2. Reverse Alphabetical Order");
+                	System.out.println("3. Title Length");
+                	System.out.println();
+                	
+                	int sortChoice = scanner.nextInt();
+                	scanner.nextLine();
+                	
+                	/* Starts new branching */
+                	
+                	switch (sortChoice) {
+                	case 1: // Sorts the books in normal Alphabetical order utilizing quickSort
+                		quickSortBooks();
+                        System.out.println("Books sorted Alphabetically (descending): ");
+                        System.out.println();
+                        displayBooks();
+                        break;
+                        
+                	case 2: // Sorts the books in reverse Alphabetical order utilizing quickSort
+                		reverseQuickSortBooks();
+                        System.out.println("Books sorted Alphabetically (ascending): ");
+                        System.out.println();
+                        displayBooks();
+                        break;
+                	case 3: // Sorts the books by Title Length order utilizing countingSort
+                		countingSortBooks();
+                        System.out.println("Books sorted by Title Length: ");
+                        System.out.println();
+                        displayBooks();
+                        break;
+                	default: // Returns to the main user menu
+                		return;
+                	}
+                	/* End of new Branching */
+                    break;
+                
+                
+                case 3: // Allows user to checkout a book
+                    System.out.print("Enter book title: ");
+                    bookTitle = scanner.nextLine();
+                    System.out.print("Enter borrower name: ");
+                    String borrowerName = scanner.nextLine();
+                    checkoutBook(bookTitle, borrowerName);
+                    break;
+                    
+                    
+                case 4: // Allows a user to return their book
+                    System.out.print("Enter book title to return: ");
+                    bookTitle = scanner.nextLine();
+                    returnBook(bookTitle);
+                    break;
+                    
+                case 5: // Displays user fines
+                	 displaySingleFine();
+                     break;
+                     
+                case 6: // Allows user to pay fines owed
+                	System.out.print("Enter borrower name: ");
+                    borrowerName = scanner.nextLine();
+                    System.out.print("Enter payment amount: ");
+                    double paymentAmount = scanner.nextDouble();
+                    payFine(borrowerName, paymentAmount);
+                    break;
+                    
+                case 7: // Exits the program and closes the scanner
+                    System.out.println("Exiting Library System...");
+                    scanner.close();
+                    return;
+                    
+                case 8: // Secret option for Admin login (not displayed in the user menu)
+                	adminLogin();
+                	break;
+                	
+                default: // Prompts the user to enter a valid option
+                    System.out.println("Invalid choice! Try again.");
+            }
+        }
+    }
+    
+    /*
+     * Main Method: Adds sample books with a starting array size of 5.
+     * Calls User Menu to begin.
+     */
+    
+	 public static void main(String[] args) {
+	        LibrarySystem library = new LibrarySystem(5);
+	        library.addBook(0, "The Great Gatsby");
+	        library.addBook(1, "War and Peace");
+	        library.addBook(2, "1984");
+	        library.addBook(3, "Moby Dick");
+	        library.addBook(4, "Hamlet");
+
+	        library.userMenu();
+	    }
+}
